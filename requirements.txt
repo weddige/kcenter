@@ -1,0 +1,18 @@
+git+https://github.com/weddige/miniball.git
+git+https://github.com/iandees/pyosm.git
+cython
+Fiona
+Shapely
+utm
+tornado
+descartes
+networkx
+
+#SciPy stack
+numpy
+scipy
+matplotlib
+ipython[notebook]
+pandas
+sympy
+nose
