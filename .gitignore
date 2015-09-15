@@ -7,4 +7,5 @@ _pyxbld
 *.so
 *~
 
-/geometry/shape.py
+/src/geometry/shape.py
+/data/Muenchen.osm

@@ -1,7 +1,7 @@
 #!/bin/bash
-
-PYTHON=~konstantin/.virtualenvs/masterarbeit/bin/python
-KAPIDIR=~konstantin/Dokumente/Masterarbeit/src/
+DIR=`dirname $0`
+PYTHON=$DIR/../venv/bin/python
+KAPIDIR=$DIR/src/
 PIDFILE=/tmp/kapi.pid
 PORT=8887
 
