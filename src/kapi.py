@@ -139,20 +139,18 @@ NODE_COLORS = ['#ffffff', '#64d9ff', '#fda364', '#b064c0', '#7d7d7d', '#64c095',
                '#c2ffff', '#64fdf3', '#ffffca', '#d86eff', '#fd6464', '#ffffe4', '#ffff64', '#ffb469']
 
 GRAPH_INSTANCES = {
-    'random': graph.erdos_renyi_random_planar_graph(100, 0.8),
+    'random': networkx.read_gpickle('../data/Random.network'),
     'muenchen': networkx.read_gpickle('../data/Muenchen.simple.network'),
-    #'pappenheim': networkx.read_gpickle('../data/Pappenheim.simple.network'),
 }
 
 GEOMETRIC_INSTANCES = {
     'random': [node[1]['pos'] for node in GRAPH_INSTANCES['random'].nodes(data=True)],
     'muenchen': [node[1]['pos'] for node in GRAPH_INSTANCES['muenchen'].nodes(data=True)],
-    #'pappenheim': [node[1]['pos'] for node in GRAPH_INSTANCES['pappenheim'].nodes(data=True)],
 }
 
 SHAPE_INSTANCES = {
+    'random': MultiPolygon([shape(pol['geometry']) for pol in fiona.open('../data/Random.shp')]),
     'muenchen': MultiPolygon([shape(pol['geometry']) for pol in fiona.open('../data/Muenchen.shp')]),
-    'pappenheim': MultiPolygon([shape(pol['geometry']) for pol in fiona.open('../data/Pappenheim.shp')]),
 }
 
 ALGORITHMS = {
@@ -195,7 +193,7 @@ ALGORITHMS = {
         'objective': geometry.kcenter.objective,
         'plotter': plot_geometric,
         'args': [
-            range(1, 3 + 1),
+            range(1, 8 + 1),
             GEOMETRIC_INSTANCES,
             [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1],
         ],
