@@ -146,7 +146,8 @@ def get_nodes_within(graph, x, r):
                 result.append(y)
     return result
 
-def growing_random_planar_graph(n, m, f=lambda: uniform(2, 5)):
+
+def growing_random_planar_graph(n, m=5, f=lambda: uniform(2, 5)):
     """
     See Random planar graphs and the London street network
     by A.P. Masuccia, D. Smith, A. Crooks, and M. Batty
@@ -156,15 +157,14 @@ def growing_random_planar_graph(n, m, f=lambda: uniform(2, 5)):
     :param m: int
     :return: Graph
     """
-    size = 100
     result = networkx.Graph()
-    result.add_node(0, pos=(uniform(0, size), uniform(0, size)))
-    attempts = 0
+    result.add_node(0, pos=(0, 0))
+    tries = 0
+    tries_bound = m #  Choose good bound tor tries
     while result.number_of_nodes() < n:
         x, data = choice(result.nodes(data=True))
         r = f()
-        # TODO: Think about appropriate limit of attempts
-        if (result.number_of_edges() + 1) % m == 0 and attempts <= 10:
+        if (result.number_of_edges() + 1) % m == 0 and tries < tries_bound:
             neighbourhood = get_nodes_within(result, x, r)
             if neighbourhood:
                 y = choice(neighbourhood)
@@ -172,13 +172,14 @@ def growing_random_planar_graph(n, m, f=lambda: uniform(2, 5)):
                     weight = math.sqrt((data['pos'][0] - result.node[y]['pos'][0])**2 +
                                        (data['pos'][1] - result.node[y]['pos'][1])**2)
                     result.add_edge(x, y, weight=weight)
-                attempts = 0
+                    tries = 0
+                else:
+                    tries += 1
             else:
-                attempts += 1
+                tries += 1
         else:
-            if attempts:
-                logger.debug('Resign finding connection after {0} attempts.'.format(attempts))
-                attempts = 0
+            if tries:
+                tries = 0
             phi = uniform(0, 2 * math.pi)
             pos = (data['pos'][0] + r * math.sin(phi), data['pos'][1] + r * math.cos(phi))
             y = result.number_of_nodes()
@@ -189,6 +190,37 @@ def growing_random_planar_graph(n, m, f=lambda: uniform(2, 5)):
                 result.remove_node(y)
     return result
 
+
+def build_grid(n, m, l=1):
+    """
+    See Random planar graphs and the London street network
+    by A.P. Masuccia, D. Smith, A. Crooks, and M. Batty
+    for further information.
+    """
+    result = networkx.grid_2d_graph(n, n)
+    for a in result.nodes():
+        result.node[a]['pos'] = (l * a[0], l * a[1])
+    for e in result.edges():
+        result.edge[e[0]][e[1]]['weight'] = l
+    for i in range(m):
+        e = choice(result.edges())
+        sigma = result.edge[e[0]][e[1]]['weight']
+        apos = (
+            (result.node[e[0]]['pos'][0] + result.node[e[1]]['pos'][0]) / 2,
+            (result.node[e[0]]['pos'][1] + result.node[e[1]]['pos'][1]) / 2
+        )
+        a = result.number_of_nodes()
+        bpos = (
+            apos[0] + (result.node[e[0]]['pos'][1] - result.node[e[1]]['pos'][1]) / 3,
+            apos[1] + (result.node[e[0]]['pos'][0] - result.node[e[1]]['pos'][0]) / 3
+        )
+        result.add_node(a, pos=apos)
+        result.add_node(a + 1, pos=bpos)
+        result.add_edge(a, a + 1, weight=sigma / 3)
+        result.add_edge(e[0], a, weight=sigma / 2)
+        result.add_edge(e[1], a, weight=sigma / 2)
+        result.remove_edge(e[0], e[1])
+    return result
 
 def add_missing_edges(graph):
     """
