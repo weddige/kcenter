@@ -6,6 +6,7 @@ import multiprocessing.pool
 import math
 import logging
 import argparse
+import operator
 
 import matplotlib
 
@@ -20,8 +21,10 @@ import io
 import hashlib
 import networkx
 from shapely.geometry import MultiPolygon, shape
+import shapely
 import fiona
 import timeout_decorator
+import descartes
 
 import geometry.kcenter
 import graph.kcenter
@@ -58,7 +61,7 @@ def nearest_center(point, centers):
     return min(range(len(centers)), key=lambda i: math.hypot((point[0] - centers[i][0]), (point[1] - centers[i][1])))
 
 
-def plot_geometric(task):
+def plot_small_geometric(task):
     args = resolve_args(task._algorithm, *task._args)
     points = args[1]
 
@@ -67,6 +70,7 @@ def plot_geometric(task):
     ax = fig.add_subplot(111)
     ax.xaxis.set_major_locator(pylab.NullLocator())
     ax.yaxis.set_major_locator(pylab.NullLocator())
+    ax.set_aspect('equal')
 
     for center in task._result:
         circle = pylab.Circle(center, task._objective, color=CENTER_COLORS[task._result.index(center)], alpha=0.2)
@@ -93,7 +97,43 @@ def plot_geometric(task):
     return stream.getvalue()
 
 
-def plot_graph(task):
+def plot_big_geometric(task):
+    args = resolve_args(task._algorithm, *task._args)
+    points = args[1]
+
+    fig = pylab.figure(figsize=(5, 5))
+    pylab.axis('off')
+    ax = fig.add_subplot(111)
+    ax.xaxis.set_major_locator(pylab.NullLocator())
+    ax.yaxis.set_major_locator(pylab.NullLocator())
+    ax.set_aspect('equal')
+
+    for center in task._result:
+        circle = pylab.Circle(center, task._objective, color=CENTER_COLORS[task._result.index(center)], alpha=0.2)
+        fig.gca().add_artist(circle)
+
+    x = [p[0] for p in points]
+    y = [p[1] for p in points]
+    colors = [CENTER_COLORS[nearest_center(p, task._result)] for p in points]
+
+    ax.scatter(x, y, c=colors, s=5, linewidth=0)
+
+    x = [p[0] for p in task._result]
+    y = [p[1] for p in task._result]
+    colors = CENTER_COLORS[:len(task._result)]
+
+    ax.scatter(x, y, c=colors, s=100, marker='p')
+
+    # ax.set_ylim([-5, 105])
+    # ax.set_xlim([-5, 105])
+
+    stream = io.BytesIO()
+    fig.savefig(stream, format='png', bbox_inches='tight', pad_inches=0)
+
+    return stream.getvalue()
+
+
+def plot_small_graph(task):
     args = resolve_args(task._algorithm, *task._args)
     data = args[1]
 
@@ -107,15 +147,17 @@ def plot_graph(task):
     ax = fig.add_subplot(111)
     ax.xaxis.set_major_locator(pylab.NullLocator())
     ax.yaxis.set_major_locator(pylab.NullLocator())
+    ax.set_aspect('equal')
 
-    colors = list()
+    node_colors = list()
+    center_colors = list()
     width = [1 for e in data.edges()]
     for n in data.nodes():
         if n in task._result:
-            colors.append(CENTER_COLORS[task._result.index(n)])
+            center_colors.append(CENTER_COLORS[task._result.index(n)])
         else:
             center = nearest_center(n, task._result)
-            colors.append(NODE_COLORS[center])
+            node_colors.append(NODE_COLORS[center])
             shortest_path = networkx.shortest_path(data, n, task._result[center], weight='weight')
             for i in range(len(shortest_path) - 1):
                 try:
@@ -123,7 +165,100 @@ def plot_graph(task):
                 except:
                     width[data.edges().index((shortest_path[i + 1], shortest_path[i]))] = 3
     pos = networkx.get_node_attributes(data, 'pos')
-    networkx.draw_networkx(data, pos, with_labels=False, node_size=100, node_color=colors, ax=ax, width=width)
+    nodes = data.nodes().copy()
+    for c in task._result:
+        nodes.remove(c)
+
+    networkx.draw_networkx(data, pos, with_labels=False, node_size=100, node_color=node_colors, width=width,
+                           nodelist=nodes)
+    networkx.draw_networkx_nodes(data, pos, with_labels=False, node_size=100, node_color=center_colors,
+                                 nodelist=task._result, node_shape='p')
+
+    stream = io.BytesIO()
+    fig.savefig(stream, format='png', bbox_inches='tight', pad_inches=0)
+
+    return stream.getvalue()
+
+
+def plot_big_graph(task):
+    args = resolve_args(task._algorithm, *task._args)
+    data = args[1]
+
+    fig = pylab.figure(figsize=(5, 5))
+    pylab.axis('off')
+    ax = fig.add_subplot(111)
+    ax.xaxis.set_major_locator(pylab.NullLocator())
+    ax.yaxis.set_major_locator(pylab.NullLocator())
+    ax.set_aspect('equal')
+
+    pos = networkx.get_node_attributes(data, 'pos')
+    nodes = data.nodes().copy()
+    for c in task._result:
+        nodes.remove(c)
+
+    networkx.draw_networkx(data, pos, with_labels=False, node_size=0, nodelist=nodes, node_color='k')
+    networkx.draw_networkx_nodes(data, pos, with_labels=False, node_size=100, node_color=CENTER_COLORS,
+                                 nodelist=task._result, node_shape='p')
+
+    stream = io.BytesIO()
+    fig.savefig(stream, format='png', bbox_inches='tight', pad_inches=0)
+
+    return stream.getvalue()
+
+
+def plot_polygon(polygon, ax=None):
+    if ax:
+        fig = None
+    else:
+        fig = pylab.figure(figsize=(5, 5))
+        ax = fig.add_subplot(111)
+        pylab.axis('off')
+
+    print(polygon.geom_type)
+
+    return fig
+
+
+def plot_shape(task):
+    args = resolve_args(task._algorithm, *task._args)
+    data = args[1]
+
+    fig = pylab.figure(figsize=(5, 5))
+    pylab.axis('off')
+    ax = fig.add_subplot(111)
+    ax.xaxis.set_major_locator(pylab.NullLocator())
+    ax.yaxis.set_major_locator(pylab.NullLocator())
+    ax.set_aspect('equal')
+
+    margin = 1
+    x_min, y_min, x_max, y_max = data.bounds
+    ax.set_xlim([x_min - margin, x_max + margin])
+    ax.set_ylim([y_min - margin, y_max + margin])
+
+    if data.geom_type == 'MultiPolygon':
+        for poly in data:
+            patch = descartes.PolygonPatch(poly, fc='#999999', ec='#000000', fill=True, zorder=-1)
+            ax.add_patch(patch)
+    else:
+        patch = descartes.PolygonPatch(data, fc='#EEEEEE', ec='#000000', fill=True, zorder=-1)
+        ax.add_patch(patch)
+
+    grid = []
+    step = geometry.kcenter._step_size(data, args[3])
+    r = math.sqrt(2) * step[4] / 2
+    for x, y in geometry.kcenter._grid_iter(*step):
+        if data.distance(shapely.geometry.Point(x, y)) < r:
+            grid.append((x, y))
+
+    x = [p[0] for p in task._result]
+    y = [p[1] for p in task._result]
+    colors = CENTER_COLORS[:len(task._result)]
+
+    ax.scatter(x, y, c=colors, s=100)
+
+    x = [p[0] for p in grid]
+    y = [p[1] for p in grid]
+    ax.scatter(x, y, s=30)
 
     stream = io.BytesIO()
     fig.savefig(stream, format='png', bbox_inches='tight', pad_inches=0)
@@ -140,7 +275,12 @@ NODE_COLORS = ['#ffffff', '#64d9ff', '#fda364', '#b064c0', '#7d7d7d', '#64c095',
 
 GRAPH_INSTANCES = {
     'random': networkx.read_gpickle('../data/Random.network'),
-    'muenchen': networkx.read_gpickle('../data/Muenchen.simple.network'),
+    'muenchen': networkx.read_gpickle('../data/Muenchen.reduced.network'),
+}
+
+GRAPH_PLOTTER = {
+    'random': plot_small_graph,
+    'muenchen': plot_big_graph,
 }
 
 GEOMETRIC_INSTANCES = {
@@ -148,16 +288,26 @@ GEOMETRIC_INSTANCES = {
     'muenchen': [node[1]['pos'] for node in GRAPH_INSTANCES['muenchen'].nodes(data=True)],
 }
 
+GEOMETRIC_PLOTTER = {
+    'random': plot_small_geometric,
+    'muenchen': plot_big_geometric,
+}
+
 SHAPE_INSTANCES = {
     'random': MultiPolygon([shape(pol['geometry']) for pol in fiona.open('../data/Random.shp')]),
     'muenchen': MultiPolygon([shape(pol['geometry']) for pol in fiona.open('../data/Muenchen.shp')]),
 }
 
+SHAPE_PLOTTER = {
+    'random': plot_shape,
+    'muenchen': plot_shape,
+}
+
 ALGORITHMS = {
-    'geometric_gonzalez': {
+    'Gonzalez (euclidean)': {
         'algorithm': geometry.kcenter.gonzalez,
         'objective': geometry.kcenter.objective,
-        'plotter': plot_geometric,
+        'plotter': GEOMETRIC_PLOTTER,
         'args': [
             range(1, len(CENTER_COLORS) + 1),
             GEOMETRIC_INSTANCES,
@@ -169,12 +319,16 @@ ALGORITHMS = {
         'arg_types': [
             int,
             str,
+        ],
+        'arg_pattern': [
+            operator.lt,
+            None
         ]
     },
-    'gonzalez': {
+    'Gonzalez (metric)': {
         'algorithm': graph.kcenter.gonzalez,
         'objective': graph.kcenter.objective,
-        'plotter': plot_graph,
+        'plotter': GRAPH_PLOTTER,
         'args': [
             range(1, len(CENTER_COLORS) + 1),
             GRAPH_INSTANCES,
@@ -186,14 +340,18 @@ ALGORITHMS = {
         'arg_types': [
             int,
             str,
+        ],
+        'arg_pattern': [
+            operator.lt,
+            None
         ]
     },
-    'brandenberg_roth': {
+    'Brandenberg-Roth': {
         'algorithm': geometry.kcenter.brandenberg_roth,
         'objective': geometry.kcenter.objective,
-        'plotter': plot_geometric,
+        'plotter': GEOMETRIC_PLOTTER,
         'args': [
-            range(1, 8 + 1),
+            range(1, len(CENTER_COLORS) + 1),
             GEOMETRIC_INSTANCES,
             [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1],
         ],
@@ -206,9 +364,123 @@ ALGORITHMS = {
             int,
             str,
             float,
+        ],
+        'arg_pattern': [
+            operator.lt,
+            None,
+            operator.gt
+        ]
+    },
+    'Grid approximation': {
+        'algorithm': geometry.kcenter.grid_approximation,
+        'objective': geometry.kcenter.objective,
+        'plotter': SHAPE_PLOTTER,
+        'args': [
+            range(1, len(CENTER_COLORS) + 1),
+            SHAPE_INSTANCES,
+            [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1],
+            [1 / 5, 1 / 50]
+        ],
+        'arg_titles': [
+            'k',
+            'instance',
+            'epsilon',
+            'fraction',
+        ],
+        'arg_types': [
+            int,
+            str,
+            float,
+            float,
+        ],
+        'arg_pattern': [
+            operator.lt,
+            None,
+            operator.gt,
+            operator.gt
         ]
     }
 }
+
+
+def decide(*args):
+    result = DECISIONS
+    for arg in args:
+        if arg in result:
+            # This yields an error if there are more args
+            result = None
+        else:
+            for choices, options in result:
+                if arg in choices:
+                    result = options
+                    break
+    if isinstance(result[0], tuple):
+        result_ = []
+        for choice in result:
+            result_.extend(choice[0])
+        return result_
+    else:
+        return result
+
+
+def build_decisions(data):
+    if data:
+        deeper = build_decisions(data[1:])
+        if deeper:
+            return [
+                (list(map(str, data[0])), deeper)
+            ]
+        else:
+            return list(map(str, data[0]))
+
+
+def train(pattern, *args):
+    global DECISIONS
+    DECISIONS = _train(args, pattern, DECISIONS)
+
+
+def _train(args, pattern, decisions):
+    try:
+        result = decisions[:]
+        if pattern[0]:
+            if args[0] in decisions:
+                for arg in decisions:
+                    if not pattern[0](args[0], arg):
+                        result.remove(arg)
+            else:
+                for choices, options in decisions:
+                    if args[0] in choices:
+                        low, high = [], []
+                        for arg in choices:
+                            if pattern[0](arg, args[0]):
+                                low.append(arg)
+                            else:
+                                high.append(arg)
+                        result.remove((choices, options))
+                        result.append((high, _train(args[1:], pattern[1:], options)))
+                        if low:
+                            result.append((low, options))
+                        break
+        else:
+            if args[0] in decisions:
+                result.remove(args[0])
+            else:
+                for choices, options in decisions:
+                    if args[0] in choices:
+                        result.remove((choices, options))
+                        result.append(([args[0]], _train(args[1:], pattern[1:], options)))
+                        choices.remove(args[0])
+                        if choices:
+                            result.append((choices, options))
+                        break
+        return result
+    except ValueError:
+        return decisions
+
+
+DECISIONS = [
+    ([algo], build_decisions(ALGORITHMS[algo]['args'])) for algo in ALGORITHMS
+]
 
 _tasks = dict()
 _workers = multiprocessing.pool.ThreadPool(2)
@@ -258,6 +530,7 @@ class Task:
 
     def _on_error(self, exception):
         logger.warn('{0} failed with {1}'.format(self.uuid, exception))
+        train([None] + ALGORITHMS[self._algorithm]['arg_pattern'], self._algorithm, *self._args)
         self.state = 'failed'
 
     @property
@@ -327,7 +600,8 @@ class ImageHandler(tornado.web.RequestHandler):
             if task.result:
                 self.set_header('Content-Type', 'image/png')
                 if not task.plot:
-                    task.plot = ALGORITHMS[task._algorithm]['plotter'](task)
+                    # This requires the instance to be the second arg. TODO: Think of a better solution
+                    task.plot = ALGORITHMS[task._algorithm]['plotter'][task._args[1]](task)
                 self.write(task.plot)
             else:
                 raise tornado.web.HTTPError(404)
@@ -350,7 +624,8 @@ class AlgorithmHandler(tornado.web.RequestHandler):
                 if len(cleaned_args) < len(alg['args']):
                     answer = {
                         'title': alg['arg_titles'][len(cleaned_args)],
-                        'suggestions': list(alg['args'][len(cleaned_args)])
+                        # 'suggestions': list(alg['args'][len(cleaned_args)])
+                        'suggestions': decide(algorithm, *args),
                     }
                     self.write(json.dumps(answer))
                 else:
@@ -385,11 +660,10 @@ application = tornado.web.Application([
     tornado.web.URLSpec(r'/tasks/(?P<uid>[a-z0-9-]+)', TasksHandler, name='task'),
     (r'/tasks', TasksHandler),
     tornado.web.URLSpec(r'/images/(?P<uid>[a-z0-9-]+)', ImageHandler, name='image'),
-    tornado.web.URLSpec(r'/algorithms/([a-z0-9_]+)(.*)', AlgorithmHandler, name='algorithm'),
+    tornado.web.URLSpec(r'/algorithms/([^/]+)(.*)', AlgorithmHandler, name='algorithm'),
     (r'/algorithms', AlgorithmHandler),
     (r'/', IndexHandler),
 ])
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
