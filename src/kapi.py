@@ -7,7 +7,9 @@ import math
 import logging
 import argparse
 import operator
+import time
 
+import copy
 import matplotlib
 
 
@@ -32,7 +34,7 @@ import graph.kcenter
 logger = logging.getLogger(__name__)
 
 TTL = 120
-TIMEOUT = 5
+TIMEOUT = 10
 
 
 def hash_args(*args):
@@ -411,20 +413,20 @@ def decide(*args):
         result_ = []
         for choice in result:
             result_.extend(choice[0])
-        return result_
+        return sorted(result_)
     else:
-        return result
+        return sorted(result)
 
 
-def build_decisions(data):
+def build_decisions(data, types):
     if data:
-        deeper = build_decisions(data[1:])
+        deeper = build_decisions(data[1:], types[1:])
         if deeper:
             return [
-                (list(map(str, data[0])), deeper)
+                (list(map(types[0], data[0])), deeper)
             ]
         else:
-            return list(map(str, data[0]))
+            return list(map(types[0], data[0]))
 
 
 def train(pattern, *args):
@@ -438,11 +440,12 @@ def _train(args, pattern, decisions):
         if pattern[0]:
             if args[0] in decisions:
                 for arg in decisions:
-                    if not pattern[0](args[0], arg):
+                    if not pattern[0](arg, args[0]):
                         result.remove(arg)
             else:
                 for choices, options in decisions:
                     if args[0] in choices:
+                        print(options)
                         low, high = [], []
                         for arg in choices:
                             if pattern[0](arg, args[0]):
@@ -450,7 +453,7 @@ def _train(args, pattern, decisions):
                             else:
                                 high.append(arg)
                         result.remove((choices, options))
-                        result.append((high, _train(args[1:], pattern[1:], options)))
+                        result.append((high, _train(args[1:], pattern[1:], copy.deepcopy(options))))
                         if low:
                             result.append((low, options))
                         break
@@ -461,7 +464,7 @@ def _train(args, pattern, decisions):
                 for choices, options in decisions:
                     if args[0] in choices:
                         result.remove((choices, options))
-                        result.append(([args[0]], _train(args[1:], pattern[1:], options)))
+                        result.append(([args[0]], _train(args[1:], pattern[1:], copy.deepcopy(options))))
                         choices.remove(args[0])
                         if choices:
                             result.append((choices, options))
@@ -472,7 +475,7 @@ def _train(args, pattern, decisions):
 
 
 DECISIONS = [
-    ([algo], build_decisions(ALGORITHMS[algo]['args'])) for algo in ALGORITHMS
+    ([algo], build_decisions(ALGORITHMS[algo]['args'], ALGORITHMS[algo]['arg_types'])) for algo in ALGORITHMS
 ]
 
 _tasks = dict()
@@ -491,6 +494,8 @@ class Task:
         self._args = args
         self.created = datetime.datetime.now()
         self.plot = None
+        self._start = None
+        self._stop = None
 
     def run(self, callback=None):
         self._callback = callback
@@ -498,6 +503,7 @@ class Task:
         def _run():
             logger.debug('Start {0}'.format(self.uuid))
             self.state = 'started'
+            self._start = time.clock()
             return timeout_decorator.timeout(
                 TIMEOUT * 60, use_signals=False
             )(
@@ -511,8 +517,9 @@ class Task:
         logger.info('{0} started'.format(self.uuid))
 
     def _on_finished(self, result):
-        logger.info('Compute objective for {0}'.format(self.uuid))
+        self._stop = time.clock()
         self._result = result
+        logger.info('Compute objective for {0}'.format(self.uuid))
         # This expects the instance to be the second argument
         args = resolve_args(self._algorithm, *self._args)
         self._objective = ALGORITHMS[self._algorithm]['objective'](args[1], result)
@@ -523,8 +530,16 @@ class Task:
 
     def _on_error(self, exception):
         logger.warn('{0} failed with {1}'.format(self.uuid, exception))
-        train([None] + ALGORITHMS[self._algorithm]['arg_pattern'], self._algorithm, *self._args)
+        train([None] + ALGORITHMS[self._algorithm]['arg_pattern'], self._algorithm,
+              *[cast(value) for cast, value in zip(ALGORITHMS[self._algorithm]['arg_types'], self._args)])
         self.state = 'failed'
+
+    @property
+    def duration(self):
+        if self._start and self._stop:
+            return self._stop - self._start
+        else:
+            return float('inf')
 
     @property
     def ttl(self):
@@ -540,6 +555,7 @@ class Task:
                 'result': self._result,
                 'objective': self._objective,
                 'img': application.reverse_url('image', self.uuid),
+                'duration': self.duration,
             }
         else:
             return {
@@ -557,6 +573,7 @@ class Task:
                 'result': self._result,
                 'objective': self._objective,
                 'img': application.reverse_url('image', self.uuid),
+                'duration': self.duration,
             }
         else:
             return None
@@ -618,7 +635,8 @@ class AlgorithmHandler(tornado.web.RequestHandler):
                     answer = {
                         'title': alg['arg_titles'][len(cleaned_args)],
                         # 'suggestions': list(alg['args'][len(cleaned_args)])
-                        'suggestions': decide(algorithm, *args),
+                        'suggestions': decide(algorithm, *[cast(value) for cast, value in
+                                                           zip(ALGORITHMS[algorithm]['arg_types'], args)]),
                     }
                     self.write(json.dumps(answer))
                 else:
