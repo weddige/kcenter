@@ -206,19 +206,6 @@ def plot_big_graph(task):
     return stream.getvalue()
 
 
-def plot_polygon(polygon, ax=None):
-    if ax:
-        fig = None
-    else:
-        fig = pylab.figure(figsize=(5, 5))
-        ax = fig.add_subplot(111)
-        pylab.axis('off')
-
-    print(polygon.geom_type)
-
-    return fig
-
-
 def plot_shape(task):
     args = resolve_args(task._algorithm, *task._args)
     data = args[1]
@@ -230,10 +217,12 @@ def plot_shape(task):
     ax.yaxis.set_major_locator(pylab.NullLocator())
     ax.set_aspect('equal')
 
-    margin = 1
+    margin = 0.4
     x_min, y_min, x_max, y_max = data.bounds
-    ax.set_xlim([x_min - margin, x_max + margin])
-    ax.set_ylim([y_min - margin, y_max + margin])
+    dx = x_max - x_min
+    dy = y_max - y_min
+    ax.set_xlim([x_min - margin * dx, x_max + margin * dx])
+    ax.set_ylim([y_min - margin * dy, y_max + margin * dy])
 
     if data.geom_type == 'MultiPolygon':
         for poly in data:
@@ -250,20 +239,24 @@ def plot_shape(task):
         if data.distance(shapely.geometry.Point(x, y)) < r:
             grid.append((x, y))
 
+    x = [p[0] for p in grid]
+    y = [p[1] for p in grid]
+    ax.scatter(x, y, s=5, c='k')
+
     x = [p[0] for p in task._result]
     y = [p[1] for p in task._result]
     colors = CENTER_COLORS[:len(task._result)]
 
     ax.scatter(x, y, c=colors, s=100)
 
-    x = [p[0] for p in grid]
-    y = [p[1] for p in grid]
-    ax.scatter(x, y, s=30)
-
     stream = io.BytesIO()
     fig.savefig(stream, format='png', bbox_inches='tight', pad_inches=0)
 
     return stream.getvalue()
+
+
+def approx_shape_objective(shape, centers):
+    return 0
 
 
 CENTER_COLORS = ['#F0A3FF', '#0075DC', '#993F00', '#4C005C', '#191919', '#005C31', '#2BCE48', '#FFCC99', '#808080',
@@ -373,7 +366,7 @@ ALGORITHMS = {
     },
     'Grid approximation': {
         'algorithm': geometry.kcenter.grid_approximation,
-        'objective': geometry.kcenter.objective,
+        'objective': approx_shape_objective,
         'plotter': SHAPE_PLOTTER,
         'args': [
             range(1, len(CENTER_COLORS) + 1),
