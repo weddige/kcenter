@@ -25,7 +25,7 @@ def objective(graph, centers):
         return float("inf")
 
 
-def gonzalez(k, graph, randomized=True, heuristic=None):
+def gonzalez(k, graph, randomized=True, heuristic=None, bellman_ford=False):
     """This function gives a 2-approximation for the k-center problem on a complete graph.
     See "Clustering to minimize the maximum intercluster distance" by
     Teofilo F. Gonzalez for more details.
@@ -37,7 +37,7 @@ def gonzalez(k, graph, randomized=True, heuristic=None):
 
     def distance(node, target):
         try:
-            #return networkx.dijkstra_path_length(graph, node, target)
+            # return networkx.dijkstra_path_length(graph, node, target)
             return networkx.astar_path_length(graph, node, target, heuristic=heuristic)
         except networkx.NetworkXNoPath:
             return float('inf')
@@ -49,11 +49,18 @@ def gonzalez(k, graph, randomized=True, heuristic=None):
     for l in range(k - 1):
         dist = 0
         head = None
-        for node in graph.nodes():
-            tmp_dist = min(distance(node, target) for target in result)
-            if tmp_dist > dist:
-                dist = tmp_dist
-                head = node
+        if bellman_ford:
+            distance = {c: networkx.bellman_ford(graph, c)[1] for c in result}
+            head = max([
+                (n, min([(c, distance[c].get(n, float('inf'))) for c in result], key=lambda i: i[1])[1])
+                for n in graph.nodes_iter()
+            ], key=lambda i: i[1])[0]
+        else:
+            for node in graph.nodes():
+                tmp_dist = min(distance(node, target) for target in result)
+                if tmp_dist > dist:
+                    dist = tmp_dist
+                    head = node
         if head:
             result.append(head)
         else:
