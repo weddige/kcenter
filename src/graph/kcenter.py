@@ -25,7 +25,7 @@ def objective(graph, centers):
         return float("inf")
 
 
-def gonzalez(k, graph, randomized=True, heuristic=None, bellman_ford=False):
+def gonzalez(k, graph, randomized=True, heuristic=None, bellman_ford=True):
     """This function gives a 2-approximation for the k-center problem on a complete graph.
     See "Clustering to minimize the maximum intercluster distance" by
     Teofilo F. Gonzalez for more details.
