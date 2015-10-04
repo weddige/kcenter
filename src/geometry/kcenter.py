@@ -43,11 +43,12 @@ def gonzalez(k, points, randomized=True):
         return math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
 
     if randomized:
-        result = [random.choice(points)]
+        index = random.choice(range(len(points)))
     else:
-        result = [points[0]]
+        index = 0
+    result = [points[index]]
     data = [(p, result[0], distance(p, result[0])) for p in points]  # O(n)
-    del data[0]
+    del data[index]
     while len(result) < k:
         furthest = max(range(len(data)), key=lambda i: data[i][2])
         new_result = data[furthest][0]
