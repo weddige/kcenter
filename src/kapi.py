@@ -82,13 +82,13 @@ def plot_small_geometric(task):
     y = [p[1] for p in points]
     colors = [NODE_COLORS[nearest_center(p, task._result)] for p in points]
 
-    ax.scatter(x, y, c=colors, s=100)
+    ax.scatter(x, y, c=colors, s=80)
 
     x = [p[0] for p in task._result]
     y = [p[1] for p in task._result]
     colors = CENTER_COLORS[:len(task._result)]
 
-    ax.scatter(x, y, c=colors, s=100)
+    ax.scatter(x, y, c=colors, s=100, marker='p')
 
     # ax.set_ylim([-5, 105])
     # ax.set_xlim([-5, 105])
@@ -264,9 +264,9 @@ def approx_shape_objective(shape, centers):
 CENTER_COLORS = ['#F0A3FF', '#0075DC', '#993F00', '#4C005C', '#191919', '#005C31', '#2BCE48', '#FFCC99', '#808080',
                  '#94FFB5', '#8F7C00', '#9DCC00', '#C20088', '#003380', '#FFA405', '#FFA8BB', '#426600', '#FF0010',
                  '#5EF1F2', '#00998F', '#E0FF66', '#740AFF', '#990000', '#FFFF80', '#FFFF00', '#FF5005']
-NODE_COLORS = ['#ffffff', '#64d9ff', '#fda364', '#b064c0', '#7d7d7d', '#64c095', '#8fffac', '#fffffd', '#e4e4e4',
-               '#f8ffff', '#f3e064', '#ffff64', '#ff64ec', '#6497e4', '#ffff69', '#ffffff', '#a6ca64', '#ff6474',
-               '#c2ffff', '#64fdf3', '#ffffca', '#d86eff', '#fd6464', '#ffffe4', '#ffff64', '#ffb469']
+NODE_COLORS = ['#ffb9ff', '#00baff', '#ff7200', '#e000ff', '#8c8c8c', '#00d06e', '#37ff5c', '#ffdea6', '#bfbfbf', 
+               '#9fffc3', '#dbbe00', '#bef700', '#ff00da', '#0089ff', '#ffc105', '#ffbfd4', '#82ca00', '#ff0016', 
+               '#68ffff', '#00e6d7', '#eaff6a', '#c310ff', '#ff0000', '#ffff82', '#ffff00', '#ff6a06']
 
 GRAPH_INSTANCES = {
     'random': networkx.read_gpickle('../data/Random.network'),
