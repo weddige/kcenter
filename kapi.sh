@@ -1,5 +1,5 @@
 #!/bin/bash
-DIR=`dirname $0`
+DIR=`readlink -e $(dirname $0)`
 PYTHON=$DIR/../venv/bin/python
 KAPIDIR=$DIR/src/
 PIDFILE=/tmp/kapi.pid
