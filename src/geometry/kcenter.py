@@ -147,7 +147,7 @@ def brandenberg_roth(k, points, epsilon=1):
         else:
             # Sort clusters descending by distance to p
             empty_set = False
-            for i in sorted(delta, key=delta.get, reverse=False):
+            for i in sorted(delta, key=delta.get, reverse=True):
                 # Skip unnessesary permutations
                 if not state.core[i]:
                     if empty_set:
