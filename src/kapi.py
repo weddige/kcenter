@@ -24,9 +24,11 @@ import hashlib
 import networkx
 from shapely.geometry import MultiPolygon, shape
 import shapely
+import shapely.ops
 import fiona
 import timeout_decorator
 import descartes
+import utm
 
 import geometry.kcenter
 import graph.kcenter
@@ -82,6 +84,15 @@ def plot_small_geometric(task):
     y = [p[1] for p in points]
     colors = [NODE_COLORS[nearest_center(p, task._result)] for p in points]
 
+    minx = min(x)
+    maxx = max(x)
+    extrax = 0.1 * (maxx - minx)
+    miny = min(y)
+    maxy = max(y)
+    extray = 0.1 * (maxy - miny)
+    ax.set_ylim([miny - extray, maxy + extray])
+    ax.set_xlim([minx - extrax, maxx + extrax])
+
     ax.scatter(x, y, c=colors, s=80)
 
     x = [p[0] for p in task._result]
@@ -118,6 +129,15 @@ def plot_big_geometric(task):
     y = [p[1] for p in points]
     colors = [CENTER_COLORS[nearest_center(p, task._result)] for p in points]
 
+    minx = min(x)
+    maxx = max(x)
+    extrax = 0.1 * (maxx - minx)
+    miny = min(y)
+    maxy = max(y)
+    extray = 0.1 * (maxy - miny)
+    ax.set_ylim([miny - extray, maxy + extray])
+    ax.set_xlim([minx - extrax, maxx + extrax])
+
     ax.scatter(x, y, c=colors, s=5, linewidth=0)
 
     x = [p[0] for p in task._result]
@@ -125,9 +145,6 @@ def plot_big_geometric(task):
     colors = CENTER_COLORS[:len(task._result)]
 
     ax.scatter(x, y, c=colors, s=100, marker='p')
-
-    # ax.set_ylim([-5, 105])
-    # ax.set_xlim([-5, 105])
 
     stream = io.BytesIO()
     fig.savefig(stream, format='png', bbox_inches='tight', pad_inches=0)
@@ -176,6 +193,18 @@ def plot_small_graph(task):
     networkx.draw_networkx_nodes(data, pos, with_labels=False, node_size=100, node_color=center_colors,
                                  nodelist=task._result, node_shape='p')
 
+    x = [p[0] for p in pos.values()]
+    y = [p[1] for p in pos.values()]
+
+    minx = min(x)
+    maxx = max(x)
+    extrax = 0.1 * (maxx - minx)
+    miny = min(y)
+    maxy = max(y)
+    extray = 0.1 * (maxy - miny)
+    ax.set_ylim([miny - extray, maxy + extray])
+    ax.set_xlim([minx - extrax, maxx + extrax])
+
     stream = io.BytesIO()
     fig.savefig(stream, format='png', bbox_inches='tight', pad_inches=0)
 
@@ -201,6 +230,18 @@ def plot_big_graph(task):
     networkx.draw_networkx(data, pos, with_labels=False, node_size=0, nodelist=nodes, node_color='k')
     networkx.draw_networkx_nodes(data, pos, with_labels=False, node_size=100, node_color=CENTER_COLORS,
                                  nodelist=task._result, node_shape='p')
+
+    x = [p[0] for p in pos.values()]
+    y = [p[1] for p in pos.values()]
+
+    minx = min(x)
+    maxx = max(x)
+    extrax = 0.1 * (maxx - minx)
+    miny = min(y)
+    maxy = max(y)
+    extray = 0.1 * (maxy - miny)
+    ax.set_ylim([miny - extray, maxy + extray])
+    ax.set_xlim([minx - extrax, maxx + extrax])
 
     stream = io.BytesIO()
     fig.savefig(stream, format='png', bbox_inches='tight', pad_inches=0)
@@ -245,11 +286,21 @@ def plot_shape(task):
     y = [p[1] for p in grid]
     ax.scatter(x, y, s=5, c='k')
 
+    for center in task._result:
+        circle = pylab.Circle(center, task._objective, color=CENTER_COLORS[task._result.index(center)], alpha=0.2)
+        fig.gca().add_artist(circle)
+
     x = [p[0] for p in task._result]
     y = [p[1] for p in task._result]
     colors = CENTER_COLORS[:len(task._result)]
 
     ax.scatter(x, y, c=colors, s=100)
+
+
+    extrax = 0.1 * (x_max - x_min)
+    extray = 0.1 * (y_max - y_min)
+    ax.set_ylim([y_min - extray, y_max + extray])
+    ax.set_xlim([x_min - extrax, x_max + extrax])
 
     stream = io.BytesIO()
     fig.savefig(stream, format='png', bbox_inches='tight', pad_inches=0)
@@ -257,8 +308,14 @@ def plot_shape(task):
     return stream.getvalue()
 
 
-def approx_shape_objective(shape, centers):
-    return 0
+def approx_shape_objective(shape, centers, fraction):
+    grid = []
+    step = geometry.kcenter._step_size(shape, fraction)
+    r = math.sqrt(2) * step[4] / 2
+    for x, y in geometry.kcenter._grid_iter(*step):
+        if shape.distance(shapely.geometry.Point(x, y)) < r:
+            grid.append((x, y))
+    return geometry.kcenter.objective(grid, centers) + r
 
 
 CENTER_COLORS = ['#F0A3FF', '#0075DC', '#993F00', '#4C005C', '#191919', '#005C31', '#2BCE48', '#FFCC99', '#808080',
@@ -288,9 +345,20 @@ GEOMETRIC_PLOTTER = {
     'muenchen': plot_big_geometric,
 }
 
+utm_zone_number = None
+def utm_transformation(lon, lat):
+    global utm_zone_number
+    result = utm.from_latlon(lat, lon, force_zone_number=utm_zone_number)
+    if not utm_zone_number:
+        utm_zone_number = result[2]
+    return result[:2]
+
+muenchen_shp = MultiPolygon([shape(pol['geometry']) for pol in fiona.open('../data/Muenchen.shp')])
+muenchen_shp = shapely.ops.transform(utm_transformation, muenchen_shp)
+
 SHAPE_INSTANCES = {
     'random': MultiPolygon([shape(pol['geometry']) for pol in fiona.open('../data/Random.shp')]),
-    'muenchen': MultiPolygon([shape(pol['geometry']) for pol in fiona.open('../data/Muenchen.shp')]),
+    'muenchen': muenchen_shp,
 }
 
 SHAPE_PLOTTER = {
@@ -374,7 +442,7 @@ ALGORITHMS = {
             range(1, len(CENTER_COLORS) + 1),
             SHAPE_INSTANCES,
             [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1],
-            [1 / 5, 1 / 50]
+            [1/5, 1/25, 1/50]
         ],
         'arg_titles': [
             'k',
@@ -522,7 +590,11 @@ class Task:
         logger.info('Compute objective for {0}'.format(self.uuid))
         # This expects the instance to be the second argument
         args = resolve_args(self._algorithm, *self._args)
-        self._objective = ALGORITHMS[self._algorithm]['objective'](args[1], result)
+        if self._algorithm == 'Grid approximation':
+            # A better solution for this would be nice
+            self._objective = ALGORITHMS[self._algorithm]['objective'](args[1], result, args[3])
+        else:
+            self._objective = ALGORITHMS[self._algorithm]['objective'](args[1], result)
         logger.info('{0} finished'.format(self.uuid))
         self.state = 'finished'
         if self._callback:
