@@ -8,6 +8,7 @@ tornado
 descartes
 networkx
 timeout_decorator
+pulp
 
 #SciPy stack
 numpy

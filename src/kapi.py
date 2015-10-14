@@ -409,6 +409,27 @@ ALGORITHMS = {
             None
         ]
     },
+    'Ilhan-Pinar': {
+        'algorithm': graph.kcenter.ilhan_pinar,
+        'objective': graph.kcenter.objective,
+        'plotter': GRAPH_PLOTTER,
+        'args': [
+            range(1, len(CENTER_COLORS) + 1),
+            GRAPH_INSTANCES,
+        ],
+        'arg_titles': [
+            'k',
+            'instance',
+        ],
+        'arg_types': [
+            int,
+            str,
+        ],
+        'arg_pattern': [
+            operator.lt,
+            None
+        ]
+    },
     'Brandenberg-Roth': {
         'algorithm': geometry.kcenter.brandenberg_roth,
         'objective': geometry.kcenter.objective,
