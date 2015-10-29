@@ -5,6 +5,8 @@ _pyxbld
 
 *.ipynb
 *.so
+*.mps
+*.sol
 *~
 
 /src/geometry/shape.py

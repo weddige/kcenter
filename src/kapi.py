@@ -82,7 +82,7 @@ def plot_small_geometric(task):
 
     x = [p[0] for p in points]
     y = [p[1] for p in points]
-    colors = [NODE_COLORS[nearest_center(p, task._result)] for p in points]
+    colors = [COLORS[nearest_center(p, task._result)] for p in points]
 
     minx = min(x)
     maxx = max(x)
@@ -176,7 +176,7 @@ def plot_small_graph(task):
             center_colors.append(CENTER_COLORS[task._result.index(n)])
         else:
             center = nearest_center(n, task._result)
-            node_colors.append(NODE_COLORS[center])
+            node_colors.append(COLORS[center])
             shortest_path = networkx.shortest_path(data, n, task._result[center], weight='weight')
             for i in range(len(shortest_path) - 1):
                 try:
@@ -227,8 +227,15 @@ def plot_big_graph(task):
     for c in task._result:
         nodes.remove(c)
 
-    networkx.draw_networkx(data, pos, with_labels=False, node_size=0, nodelist=nodes, node_color='k')
-    networkx.draw_networkx_nodes(data, pos, with_labels=False, node_size=100, node_color=CENTER_COLORS,
+    distance = {c: networkx.bellman_ford(data, c)[1] for c in task._result}
+    node_colors = [
+        COLORS[min(range(len(task._result)), key=lambda i: distance[task._result[i]].get(n, float('inf')))]
+        for n in nodes
+    ]
+
+    networkx.draw_networkx(data, pos, with_labels=False, node_size=5, nodelist=nodes, node_color=node_colors,
+                           linewidths=0)
+    networkx.draw_networkx_nodes(data, pos, with_labels=False, node_size=100, node_color=COLORS,
                                  nodelist=task._result, node_shape='p')
 
     x = [p[0] for p in pos.values()]
@@ -296,7 +303,6 @@ def plot_shape(task):
 
     ax.scatter(x, y, c=colors, s=100)
 
-
     extrax = 0.1 * (x_max - x_min)
     extray = 0.1 * (y_max - y_min)
     ax.set_ylim([y_min - extray, y_max + extray])
@@ -321,31 +327,38 @@ def approx_shape_objective(shape, centers, fraction):
 CENTER_COLORS = ['#F0A3FF', '#0075DC', '#993F00', '#4C005C', '#191919', '#005C31', '#2BCE48', '#FFCC99', '#808080',
                  '#94FFB5', '#8F7C00', '#9DCC00', '#C20088', '#003380', '#FFA405', '#FFA8BB', '#426600', '#FF0010',
                  '#5EF1F2', '#00998F', '#E0FF66', '#740AFF', '#990000', '#FFFF80', '#FFFF00', '#FF5005']
-NODE_COLORS = ['#ffb9ff', '#00baff', '#ff7200', '#e000ff', '#8c8c8c', '#00d06e', '#37ff5c', '#ffdea6', '#bfbfbf', 
-               '#9fffc3', '#dbbe00', '#bef700', '#ff00da', '#0089ff', '#ffc105', '#ffbfd4', '#82ca00', '#ff0016', 
-               '#68ffff', '#00e6d7', '#eaff6a', '#c310ff', '#ff0000', '#ffff82', '#ffff00', '#ff6a06']
+COLORS = CENTER_COLORS
+# NODE_COLORS = ['#ffb9ff', '#00baff', '#ff7200', '#e000ff', '#8c8c8c', '#00d06e', '#37ff5c', '#ffdea6', '#bfbfbf',
+#               '#9fffc3', '#dbbe00', '#bef700', '#ff00da', '#0089ff', '#ffc105', '#ffbfd4', '#82ca00', '#ff0016',
+#               '#68ffff', '#00e6d7', '#eaff6a', '#c310ff', '#ff0000', '#ffff82', '#ffff00', '#ff6a06']
 
 GRAPH_INSTANCES = {
     'random': networkx.read_gpickle('../data/Random.network'),
     'muenchen': networkx.read_gpickle('../data/Muenchen.reduced.network'),
+    'muenchen centre': networkx.read_gpickle('../data/Muenchen.centre.reduced.network'),
 }
 
 GRAPH_PLOTTER = {
     'random': plot_small_graph,
     'muenchen': plot_big_graph,
+    'muenchen centre': plot_big_graph,
 }
 
 GEOMETRIC_INSTANCES = {
     'random': [node[1]['pos'] for node in GRAPH_INSTANCES['random'].nodes(data=True)],
     'muenchen': [node[1]['pos'] for node in GRAPH_INSTANCES['muenchen'].nodes(data=True)],
+    'muenchen centre': [node[1]['pos'] for node in GRAPH_INSTANCES['muenchen centre'].nodes(data=True)],
 }
 
 GEOMETRIC_PLOTTER = {
     'random': plot_small_geometric,
     'muenchen': plot_big_geometric,
+    'muenchen centre': plot_big_geometric,
 }
 
 utm_zone_number = None
+
+
 def utm_transformation(lon, lat):
     global utm_zone_number
     result = utm.from_latlon(lat, lon, force_zone_number=utm_zone_number)
@@ -356,14 +369,19 @@ def utm_transformation(lon, lat):
 muenchen_shp = MultiPolygon([shape(pol['geometry']) for pol in fiona.open('../data/Muenchen.shp')])
 muenchen_shp = shapely.ops.transform(utm_transformation, muenchen_shp)
 
+muenchen_centre_shp = MultiPolygon([shape(pol['geometry']) for pol in fiona.open('../data/Muenchen.centre.shp')])
+muenchen_centre_shp = shapely.ops.transform(utm_transformation, muenchen_centre_shp)
+
 SHAPE_INSTANCES = {
     'random': MultiPolygon([shape(pol['geometry']) for pol in fiona.open('../data/Random.shp')]),
     'muenchen': muenchen_shp,
+    'muenchen centre': muenchen_centre_shp,
 }
 
 SHAPE_PLOTTER = {
     'random': plot_shape,
     'muenchen': plot_shape,
+    'muenchen centre': plot_shape,
 }
 
 ALGORITHMS = {
@@ -463,7 +481,7 @@ ALGORITHMS = {
             range(1, len(CENTER_COLORS) + 1),
             SHAPE_INSTANCES,
             [1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1],
-            [1/5, 1/25, 1/50]
+            [1 / 5, 1 / 25, 1 / 50]
         ],
         'arg_titles': [
             'k',
